@@ -1,20 +1,15 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from "bcryptjs";
+import type { ForgotPasswordRequestDTO, LoginRequestDTO, LoginResponseDTO, RefreshTokenRequestDTO, RefreshTokenResponseDTO, ResendOtpRequestDTO, ResetPasswordRequestDTO, SendOtpRequestDTO, ValidateOtpRequestDTO, VerifyEmailRequestDTO } from "../../../domain/dtos/user-usecaase/authdto.js";
+import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "../../../domain/error/app-error.js";
+import type { IUserRepository } from "../../../domain/repository/user-repository-impl.js";
+import type { IAuthUseCases } from "../../interface/common/auth-usecase.impl.js";
+import type { IEmailService } from "../../interface/common/email-service-usecase.impl.js";
+import type { IJwtService } from "../../interface/common/jwt-service-usecase.impl.js";
+import { OtpPurpose } from "../../../shared/enums/OtpPurpose.enum.js";
 
-import type { IAuthUseCases } from '../../interface/common/auth-usecase.impl.js';
-import type { IJwtService } from '../../interface/common/jwt-service-usecase.impl.js';
-import type { IEmailService } from '../../interface/common/email-service-usecase.impl.js';
-import {
-  NotFoundError,
-  UnauthorizedError,
-  BadRequestError,
-  ForbiddenError,
-} from '../../../domain/error/app-error.js';
-import { OtpPurpose } from '../../../shared/enums/OtpPurpose.enum.js';
-import type { ForgotPasswordRequestDTO, LoginRequestDTO, LoginResponseDTO, RefreshTokenRequestDTO, RefreshTokenResponseDTO, ResendOtpRequestDTO, ResetPasswordRequestDTO, SendOtpRequestDTO, ValidateOtpRequestDTO, VerifyEmailRequestDTO } from '../../../domain/dtos/user-usecaase/authdto.js';
-import type { IUserRepository } from '../../../domain/repository/user-repository-impl.js';
 
 const OTP_EXPIRY_MINUTES = 10;
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS        = 12;
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -23,13 +18,13 @@ function generateOtp(): string {
 export class AuthUseCases implements IAuthUseCases {
   constructor(
     private readonly userRepository: IUserRepository,
-    private readonly jwtService: IJwtService,
-    private readonly emailService: IEmailService
+    private readonly jwtService:     IJwtService,
+    private readonly emailService:   IEmailService
   ) {}
 
   // ─── LOGIN ────────────────────────────────────────────────────────────────
   async login(data: LoginRequestDTO): Promise<LoginResponseDTO> {
-    const user = await this.userRepository.findByEmail(data.email);
+    const user = await this.userRepository.findByEmailWithRole(data.email);
 
     if (!user) {
       throw new UnauthorizedError(
@@ -53,7 +48,7 @@ export class AuthUseCases implements IAuthUseCases {
       );
     }
 
-    const payload = { userId: user._id!, email: user.email };
+    const payload      = { userId: user._id!, email: user.email };
     const accessToken  = this.jwtService.generateAccessToken(payload);
     const refreshToken = this.jwtService.generateRefreshToken(payload);
 
@@ -66,11 +61,14 @@ export class AuthUseCases implements IAuthUseCases {
       accessToken,
       refreshToken,
       user: {
-        _id: user._id!,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        _id:             user._id!,
+        email:           user.email,
+        firstName:       user.firstName,
+        lastName:        user.lastName,
         isEmailVerified: user.isEmailVerified,
+        roleId:          user.role._id!,        // ObjectId of the role
+        roleName:        user.role.name,         // 'superAdmin' | 'admin' | custom
+        companyId:       user.companyId ?? null, // null for superAdmin
       },
     };
   }
@@ -86,7 +84,6 @@ export class AuthUseCases implements IAuthUseCases {
       );
     }
 
-    // Invalidate the stored refresh token
     await this.userRepository.updateRefreshToken(userId, null);
   }
 
@@ -114,7 +111,7 @@ export class AuthUseCases implements IAuthUseCases {
 
     const isTokenValid = await bcrypt.compare(data.refreshToken, user.refreshToken);
     if (!isTokenValid) {
-      // Possible token reuse attack — invalidate all sessions
+      // Possible token-reuse attack — invalidate all sessions
       await this.userRepository.updateRefreshToken(payload.userId, null);
       throw new UnauthorizedError(
         'Refresh token reuse detected. All sessions have been invalidated.',
@@ -122,7 +119,6 @@ export class AuthUseCases implements IAuthUseCases {
       );
     }
 
-    // Rotate: issue a brand-new pair
     const newPayload      = { userId: user._id!, email: user.email };
     const newAccessToken  = this.jwtService.generateAccessToken(newPayload);
     const newRefreshToken = this.jwtService.generateRefreshToken(newPayload);
@@ -160,11 +156,10 @@ export class AuthUseCases implements IAuthUseCases {
 
   // ─── RESEND OTP ───────────────────────────────────────────────────────────
   async resendOtp(data: ResendOtpRequestDTO): Promise<void> {
-    // Same logic as sendOtp — kept as separate method for route clarity
     await this.sendOtp({ email: data.email, purpose: data.purpose });
   }
 
-  // ─── VALIDATE OTP (used in forgot-password flow) ──────────────────────────
+  // ─── VALIDATE OTP ─────────────────────────────────────────────────────────
   async validateOtp(data: ValidateOtpRequestDTO): Promise<{ resetToken: string }> {
     const user = await this.userRepository.findByEmail(data.email);
 
@@ -196,13 +191,11 @@ export class AuthUseCases implements IAuthUseCases {
       );
     }
 
-    // OTP validated — clear it so it cannot be reused
     await this.userRepository.clearOtp(data.email);
 
-    // Issue a short-lived reset token the client must present at /reset-password
     const resetToken = this.jwtService.generateAccessToken({
       userId: user._id!,
-      email: user.email,
+      email:  user.email,
     });
 
     return { resetToken };
@@ -255,7 +248,7 @@ export class AuthUseCases implements IAuthUseCases {
   async forgotPassword(data: ForgotPasswordRequestDTO): Promise<void> {
     const user = await this.userRepository.findByEmail(data.email);
 
-    // Always return the same message to prevent user enumeration
+    // Always return without error to prevent user enumeration
     if (!user) return;
 
     const otp          = generateOtp();

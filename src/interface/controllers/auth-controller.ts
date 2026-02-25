@@ -1,8 +1,8 @@
-import type { Request } from 'express';
-import type { Response } from 'express';
-import type { IAuthUseCases }    from '../../application/interface/common/auth-usecase.impl.js';
-import { AppError }         from '../../domain/error/app-error.js';
-import { OtpPurpose }       from '../../shared/enums/OtpPurpose.enum.js';
+import type { Request, Response } from 'express';
+import type { IAuthUseCases } from '../../application/interface/common/auth-usecase.impl.js';
+import { OtpPurpose } from '../../shared/enums/OtpPurpose.enum.js';
+import { AppError } from '../../domain/error/app-error.js';
+
 
 export class AuthController {
   constructor(private readonly authUseCases: IAuthUseCases) {}

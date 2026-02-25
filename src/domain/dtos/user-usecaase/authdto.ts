@@ -15,6 +15,9 @@ export interface LoginResponseDTO {
     firstName: string;
     lastName: string;
     isEmailVerified: boolean;
+    roleId: string;
+    roleName: string;      
+    companyId: string | null; 
   };
 }
 

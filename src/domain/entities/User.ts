@@ -11,7 +11,7 @@ export interface IUser {
   lastName: string;
   email: string;
   otp?: string | null;
-  otpExpiresAt?: Date | null;
+  otpExpiresAt?: Date | null; 
   refreshToken?: string | null;
   isActive?: boolean;
   createdAt?: Date;
