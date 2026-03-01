@@ -41,3 +41,12 @@ export class ForbiddenError extends AppError {
     super(message, 403, suggestion);
   }
 }
+
+export class ConflictError extends AppError {
+  constructor(
+    message = 'Conflict',
+    suggestion = 'The resource already exists. Please use a different value.'
+  ) {
+    super(message, 409, suggestion);
+  }
+}
