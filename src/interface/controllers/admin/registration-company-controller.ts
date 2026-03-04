@@ -1,7 +1,7 @@
-import type { Request, Response } from 'express';
-import type { IRegistrationUseCases } from '../../application/interface/register-company/registration-usecase-impl.js';
-import { AppError } from '../../domain/error/app-error.js';
-import { PaymentProvider } from '../../shared/enums/registration.enum.js';
+import type { Request, Response }        from 'express';
+import type { IRegistrationUseCases } from '../../../application/interface/admin/registration-usecase-impl.js';
+import { AppError } from '../../../domain/error/app-error.js';
+
 
 export class RegistrationController {
   constructor(private readonly registrationUseCases: IRegistrationUseCases) {}
